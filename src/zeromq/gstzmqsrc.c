@@ -73,6 +73,8 @@ static GstFlowReturn gst_zmq_src_create (GstPushSrc * psrc,
     GstBuffer ** outbuf);
 static gboolean gst_zmq_src_stop (GstBaseSrc * bsrc);
 static gboolean gst_zmq_src_start (GstBaseSrc * bsrc);
+static gboolean gst_zmq_src_unlock (GstBaseSrc * bsrc);
+static gboolean gst_zmq_src_unlock_stop (GstBaseSrc * bsrc);
 static GstStateChangeReturn gst_zmq_src_change_state (GstElement * element,
     GstStateChange transition);
 
@@ -125,7 +127,8 @@ gst_zmq_src_class_init (GstZmqSrcClass * klass)
   gstbasesrc_class->get_caps = GST_DEBUG_FUNCPTR (gst_zmq_src_getcaps);
   gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_zmq_src_start);
   gstbasesrc_class->stop = GST_DEBUG_FUNCPTR (gst_zmq_src_stop);
-
+  gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR (gst_zmq_src_unlock);
+  gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR (gst_zmq_src_unlock_stop);
   gstpush_src_class->create = GST_DEBUG_FUNCPTR (gst_zmq_src_create);
 
   GST_DEBUG_CATEGORY_INIT (zmqsrc_debug, "zmqsrc", 0, "ZeroMQ Source");
@@ -184,6 +187,8 @@ gst_zmq_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
   }
 
   while (1) {
+    if (src->unlocked)
+      goto flushing;
     GST_DEBUG_OBJECT (src, "gst_zmq_src_create() LOCK");
     GST_OBJECT_LOCK (src);
     GST_DEBUG_OBJECT (src, "gst_zmq_src_create() LOCKED");
@@ -231,6 +236,9 @@ gst_zmq_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
       msg_size);
 done:
   return retval;
+
+flushing:
+  return GST_FLOW_FLUSHING;
 }
 
 static void
@@ -406,8 +414,8 @@ gst_zmq_src_change_state (GstElement * element, GstStateChange transition)
 
 
   switch (transition) {
-    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-      GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() NULL to READY");
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+      GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() GST_STATE_CHANGE_READY_TO_PAUSED");
 
       if (!gst_zmq_src_open (src))
         goto open_failed;
@@ -421,8 +429,8 @@ gst_zmq_src_change_state (GstElement * element, GstStateChange transition)
     goto failure;
 
   switch (transition) {
-    case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-      GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() GST_STATE_CHANGE_PLAYING_TO_PAUSED");
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+      GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() GST_STATE_CHANGE_PAUSED_TO_READY");
 
       gst_zmq_src_close (src);
       break;
@@ -442,3 +450,29 @@ failure:
     return result;
   }
 }
+
+
+static gboolean
+gst_zmq_src_unlock (GstBaseSrc * bsrc)
+{
+
+  GstZmqSrc *src = GST_ZMQ_SRC (bsrc);
+  GST_DEBUG_OBJECT (src, "gst_zmq_src_unlock()");
+
+  src->unlocked = TRUE;
+
+  return TRUE;
+}
+
+static gboolean
+gst_zmq_src_unlock_stop (GstBaseSrc * bsrc)
+{
+
+  GstZmqSrc *src = GST_ZMQ_SRC (bsrc);
+  GST_DEBUG_OBJECT (src, "gst_zmq_src_unlock_stop()");
+
+  src->unlocked = FALSE;
+
+  return TRUE;
+}
+

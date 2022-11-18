@@ -60,7 +60,8 @@ struct _GstZmqSrc {
   // zmq stuff
   void *context;
   void *socket;
-  
+  gboolean unlocked;
+
   //GCancellable *cancellable;
 };
 
