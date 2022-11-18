@@ -77,7 +77,7 @@ G_DEFINE_TYPE (GstZmqSink, gst_zmq_sink, GST_TYPE_BASE_SINK);
 static void
 gst_zmq_sink_class_init (GstZmqSinkClass * klass)
 {
-  GST_DEBUG ("zmqsink class init");
+  //GST_DEBUG ("zmqsink class init");
 
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
