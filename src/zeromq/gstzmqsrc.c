@@ -184,9 +184,15 @@ gst_zmq_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
   }
 
   while (1) {
+    GST_DEBUG_OBJECT (src, "gst_zmq_src_create() LOCK");
+    GST_OBJECT_LOCK (src);
+    GST_DEBUG_OBJECT (src, "gst_zmq_src_create() LOCKED");
     rc = zmq_msg_recv (&msg, src->socket, 0);
+    GST_OBJECT_UNLOCK (src);
+    GST_DEBUG_OBJECT (src, "gst_zmq_src_create() UNLOCKED");
+    GST_DEBUG_OBJECT (src, "rc: %d", rc);
     if ((rc < 0) && (EAGAIN == errno)) {
-      GST_LOG_OBJECT (src, "No message available on socket");
+      GST_LOG_OBJECT (src, "No message available on socket, errno: %d", errno);
       continue;
     } else {
       break;
@@ -369,7 +375,13 @@ gst_zmq_src_close (GstZmqSrc * src)
 
   gboolean retval = TRUE;
 
+  GST_DEBUG_OBJECT (src, "gst_zmq_src_close() lock");
+  GST_OBJECT_LOCK (src);
+  GST_DEBUG_OBJECT (src, "gst_zmq_src_close() locked");
   int rc = zmq_close (src->socket);
+  GST_OBJECT_UNLOCK (src);
+  GST_DEBUG_OBJECT (src, "gst_zmq_src_close() unlock");
+
 
   if (rc) {
     GST_ELEMENT_WARNING (src, RESOURCE, CLOSE,
@@ -387,10 +399,16 @@ gst_zmq_src_change_state (GstElement * element, GstStateChange transition)
   GstZmqSrc *src;
   GstStateChangeReturn result;
 
+
   src = GST_ZMQ_SRC (element);
 
+  GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() TRANSITION : %d", transition);
+
+
   switch (transition) {
-    case GST_STATE_CHANGE_NULL_TO_READY:
+    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+      GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() NULL to READY");
+
       if (!gst_zmq_src_open (src))
         goto open_failed;
       break;
@@ -403,7 +421,9 @@ gst_zmq_src_change_state (GstElement * element, GstStateChange transition)
     goto failure;
 
   switch (transition) {
-    case GST_STATE_CHANGE_READY_TO_NULL:
+    case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
+      GST_DEBUG_OBJECT (src, "gst_zmq_src_change_state() GST_STATE_CHANGE_PLAYING_TO_PAUSED");
+
       gst_zmq_src_close (src);
       break;
     default:
