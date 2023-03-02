@@ -230,7 +230,16 @@ gst_zmq_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
 
   gst_buffer_unmap (*outbuf, &map);
 
-  zmq_msg_close (&msg);
+  // Ignore later frames in multi-frame messages
+  if (zmq_msg_more(&msg)) {
+    while (1) {
+      zmq_msg_t trailing;
+      zmq_msg_init(&trailing);
+      zmq_msg_recv(&trailing, src->socket, 0);
+      zmq_msg_close(&trailing); 
+      if (!zmq_msg_more(&trailing)) break;
+    }
+  }
 
   GST_LOG_OBJECT (src, "delivered a buffer of size %" G_GSIZE_FORMAT " bytes",
       msg_size);
